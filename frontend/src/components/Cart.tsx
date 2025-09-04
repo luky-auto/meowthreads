@@ -1,56 +1,11 @@
 // src/pages/Cart.tsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Trash2, Plus, Minus, ShoppingBag } from 'lucide-react'
-
-interface CartItem {
-  id: number;
-  name: string;
-  description: string;
-  price: number;
-  quantity: number;
-  size: string;
-  image: string;
-  stock: number;
-  category: string;
-}
-
-// Datos de ejemplo del carrito (normalmente vendrían de un contexto/estado global)
-const initialCartItems: CartItem[] = [
-  {
-    id: 1,
-    name: 'Camiseta Gatuna',
-    description: 'Camiseta con estampado de gato',
-    price: 35000,
-    quantity: 2,
-    size: 'M',
-    image: '/images/camiseta1.webp',
-    stock: 15,
-    category: 'camisetas'
-  },
-  {
-    id: 2,
-    name: 'Accesorio Gatuno',
-    description: 'Collar de gato personalizado',
-    price: 20000,
-    quantity: 1,
-    size: 'Único',
-    image: '/images/collar1.webp',
-    stock: 8,
-    category: 'accesorios'
-  },
-  {
-    id: 3,
-    name: 'Saco Edición Limitada',
-    description: 'Saco exclusivo MeowThreads',
-    price: 170000,
-    quantity: 1,
-    size: 'L',
-    image: '/images/saco1.webp',
-    stock: 3,
-    category: 'edicion'
-  }
-]
+import type { Cart as CartType, CartItem } from '../api/types'
+import apiClient from '../api/api'
+import { useAuth } from '../contexts/AuthContext'
+import CheckoutModal from './CheckoutModal'
 
 const CartItemCard = ({ 
   item, 
@@ -58,57 +13,79 @@ const CartItemCard = ({
   onRemoveItem 
 }: { 
   item: CartItem;
-  onUpdateQuantity: (id: number, newQuantity: number) => void;
-  onRemoveItem: (id: number) => void;
+  onUpdateQuantity: (id: number, newQuantity: number) => Promise<void>;
+  onRemoveItem: (id: number) => Promise<void>;
 }) => {
   const [isRemoving, setIsRemoving] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
-  const handleQuantityChange = (newQuantity: number) => {
+  const handleQuantityChange = async (newQuantity: number) => {
     if (newQuantity <= 0) {
       handleRemoveItem();
       return;
     }
-    if (newQuantity > item.stock) {
-      alert(`Solo hay ${item.stock} unidades disponibles`);
+    if (newQuantity > item.product_variant.stock) {
+      alert(`Solo hay ${item.product_variant.stock} unidades disponibles`);
       return;
     }
-    onUpdateQuantity(item.id, newQuantity);
+    
+    setUpdating(true);
+    try {
+      await onUpdateQuantity(item.id, newQuantity);
+    } catch (error) {
+      console.error('Error updating quantity:', error);
+      alert('Error al actualizar la cantidad');
+    } finally {
+      setUpdating(false);
+    }
   };
 
-  const handleRemoveItem = () => {
+  const handleRemoveItem = async () => {
     setIsRemoving(true);
-    setTimeout(() => {
-      onRemoveItem(item.id);
-    }, 200);
+    try {
+      await onRemoveItem(item.id);
+    } catch (error) {
+      console.error('Error removing item:', error);
+      alert('Error al eliminar el producto');
+      setIsRemoving(false);
+    }
   };
 
-  const subtotal = item.price * item.quantity;
+  const subtotal = item.subtotal;
 
   return (
     <div className={`flex flex-col md:flex-row items-start md:items-center bg-white border border-meow-border rounded-xl p-4 shadow transition-all duration-200 ${isRemoving ? 'opacity-50 scale-95' : ''}`}>
       {/* Imagen del producto */}
       <div className="w-full md:w-24 h-24 flex-shrink-0 mb-3 md:mb-0 md:mr-4">
         <img 
-          src={item.image} 
-          alt={item.name} 
+          src={item.product_image || "/images/placeholder.webp"}
+          alt={`${item.product_name} - ${item.product_variant.size}`}
           className="w-full h-full object-cover rounded-lg"
+          onError={(e) => {
+            e.currentTarget.src = "/images/placeholder.webp";
+          }}
         />
       </div>
 
       {/* Información del producto */}
       <div className="flex-1 w-full md:w-auto">
-        <h3 className="text-lg font-semibold text-meow-text mb-1">{item.name}</h3>
-        <p className="text-sm text-gray-600 mb-2">{item.description}</p>
+        <h3 className="text-lg font-semibold text-meow-text mb-1">{item.product_name}</h3>
+        <p className="text-sm text-gray-600 mb-2">SKU: {item.product_variant.sku || 'N/A'}</p>
         
         <div className="flex flex-wrap items-center gap-4 text-sm">
           <span className="text-meow-text">
-            <strong>Talla:</strong> {item.size}
+            <strong>Talla:</strong> {item.product_variant.size}
           </span>
+          {item.product_variant.color && (
+            <span className="text-meow-text">
+              <strong>Color:</strong> {item.product_variant.color}
+            </span>
+          )}
           <span className="text-meow-text">
-            <strong>Precio:</strong> <span className="text-meow-accent font-bold">${item.price.toLocaleString()}</span>
+            <strong>Precio:</strong> <span className="text-meow-accent font-bold">${parseFloat(item.product_variant.price).toLocaleString()}</span>
           </span>
           <span className="text-gray-600">
-            Stock disponible: {item.stock}
+            Stock disponible: {item.product_variant.stock}
           </span>
         </div>
       </div>
@@ -120,22 +97,22 @@ const CartItemCard = ({
           <div className="flex items-center border border-meow-border rounded-lg">
             <button
               onClick={() => handleQuantityChange(item.quantity - 1)}
-              className="p-2 hover:bg-gray-100 transition-colors"
-              disabled={item.quantity <= 1}
+              className="p-2 hover:bg-gray-100 transition-colors disabled:opacity-50"
+              disabled={item.quantity <= 1 || updating}
             >
-              <Minus size={16} className={item.quantity <= 1 ? 'text-gray-400' : 'text-meow-text'} />
+              <Minus size={16} className={item.quantity <= 1 || updating ? 'text-gray-400' : 'text-meow-text'} />
             </button>
             
             <span className="px-4 py-2 font-medium text-meow-text min-w-[3rem] text-center">
-              {item.quantity}
+              {updating ? '...' : item.quantity}
             </span>
             
             <button
               onClick={() => handleQuantityChange(item.quantity + 1)}
-              className="p-2 hover:bg-gray-100 transition-colors"
-              disabled={item.quantity >= item.stock}
+              className="p-2 hover:bg-gray-100 transition-colors disabled:opacity-50"
+              disabled={item.quantity >= item.product_variant.stock || updating}
             >
-              <Plus size={16} className={item.quantity >= item.stock ? 'text-gray-400' : 'text-meow-text'} />
+              <Plus size={16} className={item.quantity >= item.product_variant.stock || updating ? 'text-gray-400' : 'text-meow-text'} />
             </button>
           </div>
 
@@ -150,10 +127,11 @@ const CartItemCard = ({
           {/* Botón eliminar */}
           <button
             onClick={handleRemoveItem}
-            className="flex items-center gap-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+            disabled={isRemoving || updating}
+            className="flex items-center gap-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50"
           >
             <Trash2 size={14} />
-            Eliminar
+            {isRemoving ? 'Eliminando...' : 'Eliminar'}
           </button>
         </div>
       </div>
@@ -162,28 +140,62 @@ const CartItemCard = ({
 };
 
 const Cart = () => {
-  const [cartItems, setCartItems] = useState<CartItem[]>(initialCartItems);
+  const [cart, setCart] = useState<CartType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadCart();
+    } else {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  const loadCart = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const cartData = await apiClient.getCart();
+      setCart(cartData);
+    } catch (error) {
+      console.error('Error loading cart:', error);
+      setError('Error al cargar el carrito');
+      setCart(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Calcular totales
-  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartItems = cart?.items || [];
+  const subtotal = cart?.total_price || 0;
   const shipping = subtotal > 150000 ? 0 : 15000; // Envío gratis para compras mayores a $150.000
   const discountAmount = (subtotal * discount) / 100;
   const total = subtotal + shipping - discountAmount;
 
-  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalItems = cart?.total_items || 0;
 
-  const handleUpdateQuantity = (id: number, newQuantity: number) => {
-    setCartItems(items => 
-      items.map(item => 
-        item.id === id ? { ...item, quantity: newQuantity } : item
-      )
-    );
+  const handleUpdateQuantity = async (id: number, newQuantity: number) => {
+    try {
+      await apiClient.updateCartItem(id, newQuantity);
+      await loadCart(); // Reload cart to get updated data
+    } catch (error) {
+      throw error;
+    }
   };
 
-  const handleRemoveItem = (id: number) => {
-    setCartItems(items => items.filter(item => item.id !== id));
+  const handleRemoveItem = async (id: number) => {
+    try {
+      await apiClient.removeFromCart(id);
+      await loadCart(); // Reload cart to get updated data
+    } catch (error) {
+      throw error;
+    }
   };
 
   const handleApplyPromoCode = () => {
@@ -204,11 +216,34 @@ const Cart = () => {
 
   const handleCheckout = () => {
     if (cartItems.length === 0) return;
-    
-    // Aquí iría la lógica de checkout
-    alert(`Procesando compra de ${totalItems} artículos por $${total.toLocaleString()}`);
-    console.log('Checkout:', { items: cartItems, total, discount, shipping });
+    setShowCheckoutModal(true);
   };
+
+  const handleCheckoutSuccess = async () => {
+    // Reload cart to clear it after successful checkout
+    await loadCart();
+    setShowCheckoutModal(false);
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="bg-meow-background min-h-screen text-meow-text">
+        <div className="py-10 px-4 max-w-6xl mx-auto">
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">🔒</div>
+            <h2 className="text-2xl font-medium text-meow-text mb-4">Inicia sesión para ver tu carrito</h2>
+            <p className="text-gray-600 mb-6">Necesitas una cuenta para gestionar tu carrito de compras.</p>
+            <Link 
+              to="/login"
+              className="inline-flex items-center gap-2 bg-meow-accent text-white px-6 py-3 rounded-xl hover:bg-meow-accent/90 transition font-medium"
+            >
+              Iniciar sesión
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-meow-background min-h-screen text-meow-text">
@@ -225,7 +260,17 @@ const Cart = () => {
           </h1>
         </div>
 
-        {cartItems.length === 0 ? (
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-meow-accent"></div>
+          </div>
+        ) : cartItems.length === 0 ? (
           // Carrito vacío
           <div className="text-center py-12">
             <div className="text-6xl mb-4">🛒</div>
@@ -352,6 +397,17 @@ const Cart = () => {
             </div>
           </div>
         )}
+
+        {/* Checkout Modal */}
+        <CheckoutModal
+          isOpen={showCheckoutModal}
+          onClose={() => setShowCheckoutModal(false)}
+          onSuccess={handleCheckoutSuccess}
+          cartItems={cartItems}
+          total={subtotal}
+          discount={discountAmount}
+          shipping={shipping}
+        />
       </div>
     </div>
   )

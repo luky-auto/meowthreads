@@ -1,32 +1,65 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Users2, 
   Package, 
-  CreditCard, 
   Settings, 
   BarChart3, 
   Shield,
   ChevronRight,
-  Home
+  Home,
+  ShoppingBag,
+  Tag,
+  Ruler
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import apiClient from '../api/api'
 
 // Componentes del panel de administración
 import UserManagement from '../components/admin/UserManagement.tsx'
 import InventoryManagement from '../components/admin/InventoryManagement.tsx'
-import PaymentOrders from '../components/admin/PaymentOrders.tsx'
+import OrderManagement from '../components/admin/OrderManagement.tsx'
+import CategoryManagement from '../components/admin/CategoryManagement.tsx'
+import SizeManagement from '../components/admin/SizeManagement.tsx'
 
-type AdminSection = 'dashboard' | 'users' | 'inventory' | 'payments' | 'settings'
+type AdminSection = 'dashboard' | 'users' | 'inventory' | 'categories' | 'sizes' | 'orders' | 'settings'
 
 function Admin() {
   const [activeSection, setActiveSection] = useState<AdminSection>('dashboard')
-  
-  // Datos de ejemplo para el dashboard
-  const dashboardStats = {
-    totalUsers: 152,
-    totalProducts: 47,
-    pendingOrders: 23,
-    monthlyRevenue: '$2,450,000'
+  const [dashboardStats, setDashboardStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalProducts: 0,
+    activeProducts: 0,
+    outOfStock: 0,
+    lowStock: 0
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadDashboardStats()
+  }, [])
+
+  const loadDashboardStats = async () => {
+    try {
+      setLoading(true)
+      const [userStats, productStats] = await Promise.all([
+        apiClient.getUserStats(),
+        apiClient.getProductStats()
+      ])
+      
+      setDashboardStats({
+        totalUsers: userStats.total_users,
+        activeUsers: userStats.active_users,
+        totalProducts: productStats.total_products,
+        activeProducts: productStats.active_products,
+        outOfStock: productStats.out_of_stock,
+        lowStock: productStats.low_stock
+      })
+    } catch (error) {
+      console.error('Error loading dashboard stats:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const menuItems = [
@@ -49,10 +82,22 @@ function Admin() {
       description: 'Gestión de productos y stock'
     },
     {
-      id: 'payments' as AdminSection,
-      label: 'Pagos y Pedidos',
-      icon: CreditCard,
-      description: 'Administrar transacciones y órdenes'
+      id: 'categories' as AdminSection,
+      label: 'Categorías',
+      icon: Tag,
+      description: 'Gestión de categorías de productos'
+    },
+    {
+      id: 'sizes' as AdminSection,
+      label: 'Tallas',
+      icon: Ruler,
+      description: 'Gestión de tallas disponibles'
+    },
+    {
+      id: 'orders' as AdminSection,
+      label: 'Pedidos',
+      icon: ShoppingBag,
+      description: 'Gestión de pedidos y órdenes'
     },
     {
       id: 'settings' as AdminSection,
@@ -68,8 +113,12 @@ function Admin() {
         return <UserManagement />
       case 'inventory':
         return <InventoryManagement />
-      case 'payments':
-        return <PaymentOrders />
+      case 'categories':
+        return <CategoryManagement />
+      case 'sizes':
+        return <SizeManagement />
+      case 'orders':
+        return <OrderManagement />
       case 'settings':
         return (
           <div className="bg-white rounded-xl shadow-sm p-8">
@@ -92,47 +141,57 @@ function Admin() {
             </div>
 
             {/* Estadísticas principales */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total Usuarios</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalUsers}</p>
-                  </div>
-                  <Users2 className="text-blue-500" size={32} />
-                </div>
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-meow-accent"></div>
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Usuarios</p>
+                      <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalUsers}</p>
+                      <p className="text-xs text-gray-500">{dashboardStats.activeUsers} activos</p>
+                    </div>
+                    <Users2 className="text-blue-500" size={32} />
+                  </div>
+                </div>
 
-              <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Productos</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalProducts}</p>
+                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Productos</p>
+                      <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalProducts}</p>
+                      <p className="text-xs text-gray-500">{dashboardStats.activeProducts} activos</p>
+                    </div>
+                    <Package className="text-green-500" size={32} />
                   </div>
-                  <Package className="text-green-500" size={32} />
                 </div>
-              </div>
 
-              <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-orange-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Pedidos Pendientes</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.pendingOrders}</p>
+                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-orange-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Stock Agotado</p>
+                      <p className="text-2xl font-bold text-gray-900">{dashboardStats.outOfStock}</p>
+                      <p className="text-xs text-gray-500">variantes sin stock</p>
+                    </div>
+                    <Package className="text-orange-500" size={32} />
                   </div>
-                  <CreditCard className="text-orange-500" size={32} />
                 </div>
-              </div>
 
-              <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-purple-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Ingresos del Mes</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.monthlyRevenue}</p>
+                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Stock Bajo</p>
+                      <p className="text-2xl font-bold text-gray-900">{dashboardStats.lowStock}</p>
+                      <p className="text-xs text-gray-500">variantes con poco stock</p>
+                    </div>
+                    <BarChart3 className="text-red-500" size={32} />
                   </div>
-                  <BarChart3 className="text-purple-500" size={32} />
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Accesos rápidos */}
             <div className="bg-white rounded-xl shadow-sm p-6">

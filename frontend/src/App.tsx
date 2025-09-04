@@ -9,14 +9,21 @@ import ForgotPassword from './components/ForgotPassword'
 import Orders from './components/Orders'
 import Home from './pages/Home'
 import Admin from './pages/Admin'
+import ProtectedAdminRoute from './components/ProtectedAdminRoute'
+import { AuthProvider } from './contexts/AuthContext'
 
 function App() {
   return (
-    <Router>
-      <div className="min-h-screen flex flex-col">
+    <AuthProvider>
+      <Router>
+        <div className="min-h-screen flex flex-col">
         <Routes>
           {/* Ruta de Admin sin navbar/footer */}
-          <Route path="/admin/*" element={<Admin />} />
+          <Route path="/admin/*" element={
+            <ProtectedAdminRoute>
+              <Admin />
+            </ProtectedAdminRoute>
+          } />
           
           {/* Rutas normales con navbar/footer */}
           <Route path="/*" element={
@@ -37,8 +44,9 @@ function App() {
             </>
           } />
         </Routes>
-      </div>
-    </Router>
+        </div>
+      </Router>
+    </AuthProvider>
   )
 }
 

@@ -1,14 +1,13 @@
 import { Link } from 'react-router-dom'
 import { ShoppingCart, User, Shield } from 'lucide-react'
 import { useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 
 function Navbar() {
   const [showMenu, setShowMenu] = useState(false)
+  const { user, isAuthenticated, logout } = useAuth()
   
-  // Simulamos diferentes estados de usuario
-  // En una aplicación real, esto vendría del estado de autenticación
-  const isAdmin = true // ✅ Visible temporalmente para desarrollo
-  const isLoggedIn = false // ✅ Cliente normal puede hacer login
+  const isAdmin = user?.is_superuser || user?.is_staff
 
   return (
     <nav className="bg-meow-primary text-meow-buttonText px-6 py-4 shadow-md flex justify-between items-center">
@@ -51,10 +50,11 @@ function Navbar() {
           </button>
           {showMenu && (
             <div className="absolute top-5 right-0 bg-white text-meow-text shadow-lg rounded-md p-2 w-36 z-50">
-              {isLoggedIn ? (
+              {isAuthenticated ? (
                 <>
                   <div className="px-3 py-1 text-sm text-gray-600 border-b">
-                    Usuario {isAdmin ? '(Admin)' : '(Cliente)'}
+                    {user?.first_name} {user?.last_name}
+                    {isAdmin ? ' (Admin)' : ''}
                   </div>
                   {isAdmin && (
                     <Link to="/admin" className="block px-3 py-1 hover:bg-meow-form rounded flex items-center gap-2">
@@ -62,7 +62,10 @@ function Navbar() {
                       Panel Admin
                     </Link>
                   )}
-                  <button className="block w-full text-left px-3 py-1 hover:bg-meow-form rounded">
+                  <button 
+                    onClick={logout}
+                    className="block w-full text-left px-3 py-1 hover:bg-meow-form rounded"
+                  >
                     Cerrar sesión
                   </button>
                 </>

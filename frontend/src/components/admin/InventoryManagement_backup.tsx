@@ -103,17 +103,9 @@ function InventoryManagement() {
   // Filtrar productos
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    // Safe category matching
     const matchesCategory = filterCategory === 'todos' || 
-                           (product.category && 
-                            typeof product.category === 'object' && 
-                            'id' in product.category && 
-                            product.category.id?.toString() === filterCategory) ||
-                           ((product as { category_name?: string }).category_name?.toLowerCase().includes(
-                             categories.find(c => c.id.toString() === filterCategory)?.name.toLowerCase() || ''
-                           ))
-    
+                           (product.category && typeof product.category === 'object' && 'id' in product.category && product.category.id?.toString() === filterCategory) ||
+                           ((product as { category_name?: string }).category_name?.toLowerCase().includes(categories.find(c => c.id.toString() === filterCategory)?.name.toLowerCase() || ''))
     const matchesStatus = filterStatus === 'todos' || 
                          (filterStatus === 'activo' && product.is_active) ||
                          (filterStatus === 'inactivo' && !product.is_active)
@@ -160,24 +152,10 @@ function InventoryManagement() {
   }
 
   const getStatusInfo = (product: Product) => {
-    // Handle different possible values for is_active
-    const isActive = product.is_active !== undefined ? Boolean(product.is_active) : true
-    
-    if (isActive) {
-      return { color: 'bg-green-100 text-green-800', text: 'Activo' }
+    if (product.is_active === false) {
+      return { color: 'bg-red-100 text-red-800', text: 'Inactivo' }
     }
-    return { color: 'bg-red-100 text-red-800', text: 'Inactivo' }
-  }
-
-  // Safe category name extraction
-  const getCategoryName = (product: Product): string => {
-    if (product.category && typeof product.category === 'object' && 'name' in product.category) {
-      return product.category.name
-    }
-    if ((product as { category_name?: string }).category_name) {
-      return (product as { category_name?: string }).category_name!
-    }
-    return 'Sin categoría'
+    return { color: 'bg-green-100 text-green-800', text: 'Activo' }
   }
 
   return (
@@ -305,25 +283,13 @@ function InventoryManagement() {
               <tbody>
                 {filteredProducts.map(product => {
                   const statusInfo = getStatusInfo(product)
-                  const categoryName = getCategoryName(product)
                   
                   return (
                     <tr key={product.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                            {product.main_image ? (
-                              <img
-                                src={product.main_image}
-                                alt={product.name}
-                                className="w-full h-full object-cover rounded-lg"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none'
-                                  e.currentTarget.nextElementSibling!.classList.remove('hidden')
-                                }}
-                              />
-                            ) : null}
-                            <Package size={20} className={`text-gray-600 ${product.main_image ? 'hidden' : ''}`} />
+                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <Package size={20} className="text-gray-600" />
                           </div>
                           <div>
                             <p className="font-medium text-gray-800">{product.name}</p>
@@ -334,7 +300,8 @@ function InventoryManagement() {
                       <td className="py-4 px-4">
                         <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
                           <Tag size={12} />
-                          {categoryName}
+                          {(product.category && typeof product.category === 'object' && 'name' in product.category ? product.category.name : null) || 
+                           (product as { category_name?: string }).category_name || 'Sin categoría'}
                         </span>
                       </td>
                       <td className="py-4 px-4">

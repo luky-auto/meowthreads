@@ -1,86 +1,20 @@
 // src/pages/Products.tsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import type { Product, Category, ProductVariant, ProductImage } from '../api/types'
+import apiClient from '../api/api'
 
-interface Product {
-  id: number;
-  name: string;
-  description: string;
-  price: string;
-  image: string;
-  sizes: string[];
-  stock: number;
-  category: string;
+interface ProductWithVariants extends Product {
+  variants: ProductVariant[];
+  images: ProductImage[];
 }
 
-const products: Product[] = [
-  {
-    id: 1,
-    name: 'Camiseta Gatuna',
-    description: 'Camiseta con estampado de gato',
-    price: '$35.000',
-    image: '/images/camiseta1.webp',
-    sizes: ['XS', 'S', 'M', 'L', 'XL'],
-    stock: 15,
-    category: 'camisetas'
-  },
-  {
-    id: 2,
-    name: 'Accesorio Gatuno',
-    description: 'Collar de gato personalizado',
-    price: '$20.000',
-    image: '/images/collar1.webp',
-    sizes: ['Único'],
-    stock: 8,
-    category: 'accesorios'
-  },
-  {
-    id: 3,
-    name: 'Saco Edición Limitada',
-    description: 'Saco exclusivo MeowThreads',
-    price: '$170.000',
-    image: '/images/saco1.webp',
-    sizes: ['S', 'M', 'L', 'XL'],
-    stock: 3,
-    category: 'edicion'
-  },
-  {
-    id: 4,
-    name: 'Pantalon Edición Limitada',
-    description: 'Pantalon exclusivo MeowThreads',
-    price: '$270.000',
-    image: '/images/pantalon1.webp',
-    sizes: ['28', '30', '32', '34', '36', '38'],
-    stock: 12,
-    category: 'edicion'
-  },
-  {
-    id: 5,
-    name: 'Medias Edición Limitada',
-    description: 'Medias exclusivo MeowThreads',
-    price: '$70.000',
-    image: '/images/medias1.webp',
-    sizes: ['S', 'M', 'L'],
-    stock: 20,
-    category: 'edicion'
-  },
-  {
-    id: 6,
-    name: 'Zapatos Edición Limitada',
-    description: 'Zapatos exclusivo MeowThreads',
-    price: '$370.000',
-    image: '/images/zapatos1.webp',
-    sizes: ['36', '37', '38', '39', '40', '41', '42'],
-    stock: 6,
-    category: 'edicion'
-  }
-]
-
 // Componente individual para cada producto
-const ProductCard = ({ product }: { product: Product }) => {
-  const [selectedSize, setSelectedSize] = useState('');
+const ProductCard = ({ product }: { product: ProductWithVariants }) => {
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [customQuantity, setCustomQuantity] = useState('');
   const [useCustomQuantity, setUseCustomQuantity] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleQuantityChange = (value: string) => {
     if (value === 'custom') {
@@ -94,8 +28,11 @@ const ProductCard = ({ product }: { product: Product }) => {
   };
 
   const handleCustomQuantityChange = (value: string) => {
+    if (!selectedVariant) return;
+    
     const numValue = parseInt(value);
-    if (!isNaN(numValue) && numValue > 0 && numValue <= product.stock) {
+    const variantStock = selectedVariant.stock || selectedVariant.stock_quantity || 0;
+    if (!isNaN(numValue) && numValue > 0 && numValue <= variantStock) {
       setCustomQuantity(value);
       setQuantity(numValue);
     } else if (value === '') {
@@ -104,8 +41,8 @@ const ProductCard = ({ product }: { product: Product }) => {
     }
   };
 
-  const handleAddToCart = () => {
-    if (!selectedSize) {
+  const handleAddToCart = async () => {
+    if (!selectedVariant) {
       alert('Por favor selecciona una talla');
       return;
     }
@@ -113,66 +50,115 @@ const ProductCard = ({ product }: { product: Product }) => {
       alert('Por favor selecciona una cantidad válida');
       return;
     }
-    if (quantity > product.stock) {
-      alert(`Solo hay ${product.stock} unidades disponibles`);
+    const variantStock = selectedVariant.stock || selectedVariant.stock_quantity || 0;
+    if (quantity > variantStock) {
+      alert(`Solo hay ${variantStock} unidades disponibles`);
       return;
     }
 
-    console.log('Agregado al carrito:', {
-      product: product.name,
-      size: selectedSize,
-      quantity: quantity,
-      price: product.price
-    });
-
-    // Aquí iría la lógica para agregar al carrito
-    alert(`${product.name} agregado al carrito!\nTalla: ${selectedSize}\nCantidad: ${quantity}`);
+    try {
+      setLoading(true);
+      await apiClient.addToCart(selectedVariant.id, quantity);
+      alert(`${product.name} agregado al carrito!\nTalla: ${selectedVariant.size}\nCantidad: ${quantity}`);
+      
+      // Reset form
+      setSelectedVariant(null);
+      setQuantity(1);
+      setCustomQuantity('');
+      setUseCustomQuantity(false);
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      alert('Error al agregar al carrito. Intenta nuevamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Generar opciones de cantidad (máximo 5, luego opción personalizada)
   const quantityOptions = [];
-  const maxOptions = Math.min(5, product.stock);
+  const variantStock = selectedVariant ? (selectedVariant.stock || selectedVariant.stock_quantity || 0) : 0;
+  const maxOptions = selectedVariant ? Math.min(5, variantStock) : 5;
   
   for (let i = 1; i <= maxOptions; i++) {
     quantityOptions.push(i);
   }
 
+  // Get primary image or first available image
+  const primaryImage = product.images.find(img => img.is_primary) || product.images[0];
+  const totalStock = product.variants.reduce((sum, variant) => sum + (variant.stock || variant.stock_quantity || 0), 0);
+  
+  // Calculate price range from variants
+  const getProductPrice = () => {
+    if (selectedVariant) {
+      return `$${selectedVariant.price}`;
+    }
+    
+    if (product.variants.length === 0) {
+      // No variants, show base product price
+      return product.price ? `$${parseFloat(product.price).toLocaleString()}` : 'Precio no disponible';
+    }
+    
+    const prices = product.variants.map(v => parseFloat(v.price));
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    
+    if (minPrice === maxPrice) {
+      return `$${minPrice.toLocaleString()}`;
+    } else {
+      return `Desde $${minPrice.toLocaleString()}`;
+    }
+  };
+
   return (
     <div className="border border-meow-border rounded-xl p-4 bg-meow-form shadow">
       <img
-        src={product.image}
-        alt={product.name}
+        src={primaryImage?.image || '/images/placeholder.webp'}
+        alt={primaryImage?.alt_text || product.name}
         className="w-full h-[250px] object-cover rounded-lg mb-4"
       />
       <h2 className="text-xl font-semibold text-meow-text">{product.name}</h2>
       <p className="text-sm text-gray-600 mb-2">{product.description}</p>
-      <p className="text-meow-accent font-bold mb-2">{product.price}</p>
+      <p className="text-meow-accent font-bold mb-2">
+        {getProductPrice()}
+      </p>
       
       {/* Stock disponible */}
       <p className="text-sm text-meow-text mb-3">
-        <span className={`font-medium ${product.stock > 5 ? 'text-green-600' : product.stock > 0 ? 'text-yellow-600' : 'text-red-600'}`}>
-          {product.stock > 0 ? `${product.stock} disponibles` : 'Agotado'}
+        <span className={`font-medium ${totalStock > 5 ? 'text-green-600' : totalStock > 0 ? 'text-yellow-600' : 'text-red-600'}`}>
+          {totalStock > 0 ? `${totalStock} disponibles` : 'Agotado'}
         </span>
       </p>
 
-      {product.stock > 0 && (
+      {totalStock > 0 && (
         <>
-          {/* Selector de talla */}
+          {/* Selector de variante */}
           <div className="mb-3">
             <label className="block text-sm font-medium text-meow-text mb-1">
-              Talla:
+              Talla/Color:
             </label>
             <select
-              value={selectedSize}
-              onChange={(e) => setSelectedSize(e.target.value)}
+              value={selectedVariant?.id || ''}
+              onChange={(e) => {
+                const variant = product.variants.find(v => v.id === parseInt(e.target.value));
+                setSelectedVariant(variant || null);
+                setQuantity(1);
+                setUseCustomQuantity(false);
+                setCustomQuantity('');
+              }}
               className="w-full px-3 py-2 border border-meow-border rounded-md focus:outline-none focus:ring-2 focus:ring-meow-accent text-sm"
             >
-              <option value="">Seleccionar talla</option>
-              {product.sizes.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
+              <option value="">Seleccionar opción</option>
+              {product.variants
+                .filter(variant => (variant.stock || variant.stock_quantity || 0) > 0)
+                .map((variant) => {
+                  const stock = variant.stock || variant.stock_quantity || 0;
+                  return (
+                    <option key={variant.id} value={variant.id}>
+                      {variant.size} {variant.color ? `- ${variant.color}` : ''} 
+                      ({stock} disponibles) - ${variant.price}
+                    </option>
+                  );
+                  })}
             </select>
           </div>
 
@@ -193,7 +179,7 @@ const ProductCard = ({ product }: { product: Product }) => {
                     {num}
                   </option>
                 ))}
-                {product.stock > 5 && (
+                {selectedVariant && selectedVariant.stock > 5 && (
                   <option value="custom">Más de 5 (especificar)</option>
                 )}
               </select>
@@ -202,10 +188,10 @@ const ProductCard = ({ product }: { product: Product }) => {
                 <input
                   type="number"
                   min="1"
-                  max={product.stock}
+                  max={variantStock}
                   value={customQuantity}
                   onChange={(e) => handleCustomQuantityChange(e.target.value)}
-                  placeholder={`Máx. ${product.stock}`}
+                  placeholder={`Máx. ${variantStock}`}
                   className="flex-1 px-3 py-2 border border-meow-border rounded-md focus:outline-none focus:ring-2 focus:ring-meow-accent text-sm"
                 />
                 <button
@@ -224,14 +210,15 @@ const ProductCard = ({ product }: { product: Product }) => {
 
           <button 
             onClick={handleAddToCart}
-            className="w-full bg-meow-accent text-white px-4 py-2 rounded hover:bg-meow-accent/90 transition"
+            disabled={!selectedVariant || loading}
+            className="w-full bg-meow-accent text-white px-4 py-2 rounded hover:bg-meow-accent/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Agregar al carrito
+            {loading ? 'Agregando...' : 'Agregar al carrito'}
           </button>
         </>
       )}
 
-      {product.stock === 0 && (
+      {totalStock === 0 && (
         <button 
           disabled
           className="w-full bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed"
@@ -246,62 +233,124 @@ const ProductCard = ({ product }: { product: Product }) => {
 const Products = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [products, setProducts] = useState<ProductWithVariants[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentPage] = useState(1);
 
-  // Filtrar productos
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === '' || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  useEffect(() => {
+    loadProducts();
+    loadCategories();
+  }, [currentPage, selectedCategory, searchTerm]);
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const categoryId = selectedCategory ? parseInt(selectedCategory) : undefined;
+      const response = await apiClient.getProducts(currentPage, categoryId, searchTerm);
+      
+      // Load variants and images for each product
+      const productsWithDetails = await Promise.all(
+        response.results.map(async (product) => {
+          const [variants, images] = await Promise.all([
+            apiClient.getProductVariants(product.id),
+            apiClient.getProductImages(product.id)
+          ]);
+          
+          return {
+            ...product,
+            variants,
+            images
+          } as ProductWithVariants;
+        })
+      );
+      
+      setProducts(productsWithDetails);
+    } catch (error) {
+      console.error('Error loading products:', error);
+      setError('Error al cargar productos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const categoriesData = await apiClient.getCategories();
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  };
+
+  const filteredProducts = products;
 
   return (
     <div className="bg-meow-background min-h-screen text-meow-text">
         <div className="py-10 px-4 max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-meow-text mb-6">Productos disponibles</h1>
+          <h1 className="text-3xl font-bold text-meow-text mb-6">Productos disponibles</h1>
 
-        {/* Buscador y filtros */}
-        <div className="mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          {/* Buscador y filtros */}
+          <div className="mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
             <input
-            type="text"
-            placeholder="Buscar productos..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full md:w-1/2 px-4 py-2 border border-meow-border rounded-md focus:outline-none focus:ring-2 focus:ring-meow-accent"
+              type="text"
+              placeholder="Buscar productos..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full md:w-1/2 px-4 py-2 border border-meow-border rounded-md focus:outline-none focus:ring-2 focus:ring-meow-accent"
             />
             <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full md:w-1/4 px-4 py-2 border border-meow-border rounded-md focus:outline-none focus:ring-2 focus:ring-meow-accent"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full md:w-1/4 px-4 py-2 border border-meow-border rounded-md focus:outline-none focus:ring-2 focus:ring-meow-accent"
             >
-            <option value="">Todas las categorías</option>
-            <option value="camisetas">Camisetas</option>
-            <option value="accesorios">Accesorios</option>
-            <option value="edicion">Edición limitada</option>
+              <option value="">Todas las categorías</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id.toString()}>
+                  {category.name}
+                </option>
+              ))}
             </select>
-        </div>
-
-        {/* Mostrar cantidad de productos encontrados */}
-        <div className="mb-4">
-          <p className="text-meow-text">
-            {filteredProducts.length === products.length 
-              ? `Mostrando todos los ${products.length} productos`
-              : `Mostrando ${filteredProducts.length} de ${products.length} productos`
-            }
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {filteredProducts.map(product => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-        </div>
-
-        {filteredProducts.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-meow-text text-lg">No se encontraron productos que coincidan con tu búsqueda.</p>
           </div>
-        )}
+
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-meow-accent"></div>
+            </div>
+          ) : (
+            <>
+              {/* Mostrar cantidad de productos encontrados */}
+              <div className="mb-4">
+                <p className="text-meow-text">
+                  {filteredProducts.length === 1 
+                    ? '1 producto encontrado'
+                    : `${filteredProducts.length} productos encontrados`
+                  }
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {filteredProducts.map(product => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+
+              {filteredProducts.length === 0 && !loading && (
+                <div className="text-center py-8">
+                  <p className="text-meow-text text-lg">No se encontraron productos.</p>
+                </div>
+              )}
+            </>
+          )}
         </div>
     </div>
   )

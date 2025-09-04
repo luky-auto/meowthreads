@@ -1,261 +1,185 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import type { Order } from '../api/types';
+import apiClient from '../api/api';
+import { useAuth } from '../contexts/AuthContext';
+import { Package, Calendar, MapPin, CheckCircle, Clock, Truck, XCircle } from 'lucide-react';
 
-interface OrderItem {
-  id: number;
-  name: string;
-  size: string;
-  quantity: number;
-  price: string;
-  image: string;
-}
-
-interface Order {
-  id: string;
-  date: string;
-  status: 'Pendiente' | 'Enviado' | 'Entregado' | 'Cancelado';
-  items: OrderItem[];
-  total: string;
-  shippingAddress: string;
-}
-
-// Datos de ejemplo de pedidos
-const sampleOrders: Order[] = [
-  {
-    id: 'PED-2025-001',
-    date: '2025-01-28',
-    status: 'Enviado',
-    total: '$305.000',
-    shippingAddress: 'Calle 123 #45-67, Bogotá',
-    items: [
-      {
-        id: 1,
-        name: 'Camiseta Gatuna',
-        size: 'M',
-        quantity: 2,
-        price: '$35.000',
-        image: '/images/camiseta1.webp'
-      },
-      {
-        id: 3,
-        name: 'Saco Edición Limitada',
-        size: 'L',
-        quantity: 1,
-        price: '$170.000',
-        image: '/images/saco1.webp'
-      },
-      {
-        id: 5,
-        name: 'Medias Edición Limitada',
-        size: 'M',
-        quantity: 1,
-        price: '$70.000',
-        image: '/images/medias1.webp'
-      }
-    ]
-  },
-  {
-    id: 'PED-2025-002',
-    date: '2025-01-30',
-    status: 'Pendiente',
-    total: '$290.000',
-    shippingAddress: 'Carrera 456 #78-90, Medellín',
-    items: [
-      {
-        id: 2,
-        name: 'Accesorio Gatuno',
-        size: 'Único',
-        quantity: 1,
-        price: '$20.000',
-        image: '/images/collar1.webp'
-      },
-      {
-        id: 4,
-        name: 'Pantalon Edición Limitada',
-        size: '32',
-        quantity: 1,
-        price: '$270.000',
-        image: '/images/pantalon1.webp'
-      }
-    ]
-  },
-  {
-    id: 'PED-2025-003',
-    date: '2025-02-01',
-    status: 'Entregado',
-    total: '$390.000',
-    shippingAddress: 'Avenida 789 #12-34, Cali',
-    items: [
-      {
-        id: 6,
-        name: 'Zapatos Edición Limitada',
-        size: '40',
-        quantity: 1,
-        price: '$370.000',
-        image: '/images/zapatos1.webp'
-      },
-      {
-        id: 2,
-        name: 'Accesorio Gatuno',
-        size: 'Único',
-        quantity: 1,
-        price: '$20.000',
-        image: '/images/collar1.webp'
-      }
-    ]
-  },
-  {
-    id: 'PED-2025-004',
-    date: '2025-01-25',
-    status: 'Cancelado',
-    total: '$105.000',
-    shippingAddress: 'Diagonal 321 #56-78, Barranquilla',
-    items: [
-      {
-        id: 1,
-        name: 'Camiseta Gatuna',
-        size: 'S',
-        quantity: 3,
-        price: '$35.000',
-        image: '/images/camiseta1.webp'
-      }
-    ]
+const getStatusIcon = (status: Order['status']) => {
+  switch (status) {
+    case 'pending':
+      return <Clock size={16} className="text-yellow-600" />;
+    case 'confirmed':
+      return <CheckCircle size={16} className="text-blue-600" />;
+    case 'processing':
+      return <Package size={16} className="text-indigo-600" />;
+    case 'shipped':
+      return <Truck size={16} className="text-purple-600" />;
+    case 'delivered':
+      return <CheckCircle size={16} className="text-green-600" />;
+    case 'cancelled':
+      return <XCircle size={16} className="text-red-600" />;
+    case 'refunded':
+      return <XCircle size={16} className="text-gray-600" />;
+    default:
+      return <Clock size={16} className="text-gray-600" />;
   }
-];
+};
+
+const getStatusColor = (status: Order['status']) => {
+  switch (status) {
+    case 'pending':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'confirmed':
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'processing':
+      return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+    case 'shipped':
+      return 'bg-purple-100 text-purple-800 border-purple-200';
+    case 'delivered':
+      return 'bg-green-100 text-green-800 border-green-200';
+    case 'cancelled':
+      return 'bg-red-100 text-red-800 border-red-200';
+    case 'refunded':
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
+};
+
+const getStatusText = (status: Order['status']) => {
+  switch (status) {
+    case 'pending':
+      return 'Pendiente';
+    case 'confirmed':
+      return 'Confirmado';
+    case 'processing':
+      return 'Procesando';
+    case 'shipped':
+      return 'Enviado';
+    case 'delivered':
+      return 'Entregado';
+    case 'cancelled':
+      return 'Cancelado';
+    case 'refunded':
+      return 'Reembolsado';
+    default:
+      return 'Desconocido';
+  }
+};
 
 const OrderCard = ({ order }: { order: Order }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  const getStatusColor = (status: Order['status']) => {
-    switch (status) {
-      case 'Pendiente':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'Enviado':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'Entregado':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'Cancelado':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getStatusIcon = (status: Order['status']) => {
-    switch (status) {
-      case 'Pendiente':
-        return '⏳';
-      case 'Enviado':
-        return '🚚';
-      case 'Entregado':
-        return '✅';
-      case 'Cancelado':
-        return '❌';
-      default:
-        return '❓';
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="border border-meow-border rounded-xl p-6 bg-meow-form shadow-md">
-      {/* Encabezado del pedido */}
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <h3 className="text-lg font-bold text-meow-text">
-            Pedido #{order.id}
-          </h3>
-          <p className="text-sm text-gray-600">
-            Fecha: {formatDate(order.date)}
-          </p>
-        </div>
-        <div className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(order.status)}`}>
-          {getStatusIcon(order.status)} {order.status}
-        </div>
-      </div>
-
-      {/* Resumen del pedido */}
-      <div className="flex justify-between items-center mb-4">
-        <div className="text-meow-text">
-          <p className="font-medium">Total: <span className="text-meow-accent font-bold">{order.total}</span></p>
-          <p className="text-sm text-gray-600">{totalItems} artículo{totalItems !== 1 ? 's' : ''}</p>
-        </div>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-meow-accent hover:text-meow-accent/80 font-medium text-sm"
-        >
-          {isExpanded ? 'Ocultar detalles ▲' : 'Ver detalles ▼'}
-        </button>
-      </div>
-
-      {/* Detalles expandibles */}
-      {isExpanded && (
-        <div className="border-t border-meow-border pt-4">
-          {/* Dirección de envío */}
-          <div className="mb-4">
-            <h4 className="font-medium text-meow-text mb-1">Dirección de envío:</h4>
-            <p className="text-sm text-gray-600">{order.shippingAddress}</p>
+    <div className="bg-white border border-meow-border rounded-xl p-6 shadow hover:shadow-md transition-shadow">
+      {/* Order Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+        <div className="mb-2 md:mb-0">
+          <h3 className="text-lg font-semibold text-meow-text">Pedido #{order.id}</h3>
+          <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+            <Calendar size={14} />
+            <span>{new Date(order.created_at).toLocaleDateString('es-ES')}</span>
           </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(order.status)}`}>
+            {getStatusIcon(order.status)}
+            <span>{getStatusText(order.status)}</span>
+          </div>
+          
+          <div className="text-right">
+            <p className="text-lg font-bold text-meow-accent">${parseFloat(order.total_amount).toLocaleString()}</p>
+            <p className="text-sm text-gray-600">{order.items.length} artículo{order.items.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+      </div>
 
-          {/* Items del pedido */}
+      {/* Shipping Address */}
+      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+        <div className="flex items-start gap-2">
+          <MapPin size={16} className="text-gray-600 mt-0.5 flex-shrink-0" />
           <div>
-            <h4 className="font-medium text-meow-text mb-3">Detalle del pedido:</h4>
-            <div className="space-y-3">
-              {order.items.map((item, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-12 h-12 object-cover rounded-md"
-                  />
-                  <div className="flex-1">
-                    <h5 className="font-medium text-meow-text text-sm">{item.name}</h5>
-                    <p className="text-xs text-gray-600">
-                      Talla: {item.size} | Cantidad: {item.quantity}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-meow-accent text-sm">{item.price}</p>
-                    <p className="text-xs text-gray-600">c/u</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <p className="text-sm font-medium text-meow-text">Dirección de envío:</p>
+            {order.shipping_address ? (
+              <>
+                <p className="text-sm text-gray-600">
+                  {order.shipping_address.street_address}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.postal_code}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {order.shipping_address.country}
+                </p>
+              </>
+            ) : order.notes && order.notes.includes('Dirección:') ? (
+              <p className="text-sm text-gray-600">
+                {order.notes.split('. Pago:')[0].replace('Dirección: ', '')}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-600">
+                Información no disponible
+              </p>
+            )}
           </div>
+        </div>
+      </div>
 
-          {/* Información adicional según el estado */}
-          {order.status === 'Enviado' && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-blue-800">
-                📦 Tu pedido está en camino. Tiempo estimado de entrega: 2-3 días hábiles.
-              </p>
-            </div>
-          )}
+      {/* Toggle Details Button */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="text-meow-accent hover:text-meow-accent/80 text-sm font-medium mb-4"
+      >
+        {expanded ? 'Ocultar detalles' : 'Ver detalles'} {expanded ? '↑' : '↓'}
+      </button>
 
-          {order.status === 'Entregado' && (
-            <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-              <p className="text-sm text-green-800">
-                🎉 ¡Pedido entregado exitosamente! Gracias por tu compra.
-              </p>
-            </div>
-          )}
-
-          {order.status === 'Cancelado' && (
-            <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
-              <p className="text-sm text-red-800">
-                ℹ️ Este pedido fue cancelado. Si tienes preguntas, contáctanos.
-              </p>
-            </div>
-          )}
+      {/* Order Items (Expandable) */}
+      {expanded && (
+        <div className="border-t border-gray-200 pt-4">
+          <h4 className="font-medium text-meow-text mb-3">Artículos del pedido:</h4>
+          <div className="space-y-3">
+            {order.items.map((item, index) => (
+              <div key={index} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                <div className="w-12 h-12 bg-gray-200 rounded-lg flex-shrink-0">
+                  {item.product_image ? (
+                    <img 
+                      src={item.product_image} 
+                      alt={item.product_name}
+                      className="w-full h-full object-cover rounded-lg"
+                      onError={(e) => {
+                        e.currentTarget.src = "/images/placeholder.webp";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-400 rounded-lg flex items-center justify-center">
+                      <Package size={16} className="text-gray-500" />
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-meow-text truncate">
+                    {item.product_name}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    Talla: {item.product_size}
+                    {item.product_color && ` • Color: ${item.product_color}`}
+                  </p>
+                </div>
+                
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-medium text-meow-text">
+                    {item.quantity} × ${parseFloat(item.unit_price).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    Subtotal: ${parseFloat(item.subtotal).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -263,75 +187,89 @@ const OrderCard = ({ order }: { order: Order }) => {
 };
 
 const Orders = () => {
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth();
 
-  // Filtrar pedidos
-  const filteredOrders = sampleOrders.filter(order => {
-    const matchesStatus = statusFilter === '' || order.status === statusFilter;
-    const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.items.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchesStatus && matchesSearch;
-  });
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadOrders();
+    } else {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
 
-  // Ordenar por fecha (más recientes primero)
-  const sortedOrders = filteredOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiClient.getOrders();
+      setOrders(response.results);
+    } catch (error) {
+      console.error('Error loading orders:', error);
+      setError('Error al cargar los pedidos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="bg-meow-background min-h-screen text-meow-text">
+        <div className="py-10 px-4 max-w-6xl mx-auto">
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">🔒</div>
+            <h2 className="text-2xl font-medium text-meow-text mb-4">Inicia sesión para ver tus pedidos</h2>
+            <p className="text-gray-600 mb-6">Necesitas una cuenta para ver el historial de tus pedidos.</p>
+            <Link 
+              to="/login"
+              className="inline-flex items-center gap-2 bg-meow-accent text-white px-6 py-3 rounded-xl hover:bg-meow-accent/90 transition font-medium"
+            >
+              Iniciar sesión
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-meow-background min-h-screen text-meow-text">
-      <div className="py-10 px-4 max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-meow-text mb-6">Mis Pedidos</h1>
-
-        {/* Filtros */}
-        <div className="mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <input
-            type="text"
-            placeholder="Buscar por ID de pedido o producto..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full md:w-1/2 px-4 py-2 border border-meow-border rounded-md focus:outline-none focus:ring-2 focus:ring-meow-accent"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full md:w-1/4 px-4 py-2 border border-meow-border rounded-md focus:outline-none focus:ring-2 focus:ring-meow-accent"
-          >
-            <option value="">Todos los estados</option>
-            <option value="Pendiente">Pendiente</option>
-            <option value="Enviado">Enviado</option>
-            <option value="Entregado">Entregado</option>
-            <option value="Cancelado">Cancelado</option>
-          </select>
+      <div className="py-10 px-4 max-w-6xl mx-auto">
+        <div className="flex items-center gap-3 mb-8">
+          <Package size={28} className="text-meow-accent" />
+          <h1 className="text-3xl font-bold text-meow-text">Mis Pedidos</h1>
         </div>
 
-        {/* Contador de resultados */}
-        <div className="mb-4">
-          <p className="text-meow-text">
-            {filteredOrders.length === sampleOrders.length 
-              ? `Mostrando todos los ${sampleOrders.length} pedidos`
-              : `Mostrando ${filteredOrders.length} de ${sampleOrders.length} pedidos`
-            }
-          </p>
-        </div>
+        {error && (
+          <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+            {error}
+          </div>
+        )}
 
-        {/* Lista de pedidos */}
-        <div className="space-y-6">
-          {sortedOrders.map(order => (
-            <OrderCard key={order.id} order={order} />
-          ))}
-        </div>
-
-        {/* Estado sin resultados */}
-        {filteredOrders.length === 0 && (
-          <div className="text-center py-8">
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-meow-accent"></div>
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="text-center py-12">
             <div className="text-6xl mb-4">📦</div>
-            <h3 className="text-xl font-medium text-meow-text mb-2">No se encontraron pedidos</h3>
-            <p className="text-gray-600">
-              {searchTerm || statusFilter 
-                ? 'Intenta ajustar los filtros de búsqueda.'
-                : 'Aún no tienes pedidos realizados.'
-              }
-            </p>
+            <h2 className="text-2xl font-medium text-meow-text mb-4">No tienes pedidos aún</h2>
+            <p className="text-gray-600 mb-6">¡Comienza a comprar y tus pedidos aparecerán aquí!</p>
+            <Link 
+              to="/productos"
+              className="inline-flex items-center gap-2 bg-meow-accent text-white px-6 py-3 rounded-xl hover:bg-meow-accent/90 transition font-medium"
+            >
+              <Package size={20} />
+              Ver productos
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {orders.map((order) => (
+              <OrderCard key={order.id} order={order} />
+            ))}
           </div>
         )}
       </div>
