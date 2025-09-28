@@ -3,10 +3,12 @@ import { ShoppingBag, Eye, Filter, Calendar, DollarSign, Package, Truck } from '
 import type { Order } from '../../api/types'
 import apiClient from '../../api/api'
 
+import { useToast } from '../../contexts/ToastContext'
 const OrderManagement = () => {
+  const { error: showError } = useToast()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [showOrderModal, setShowOrderModal] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -18,12 +20,12 @@ const OrderManagement = () => {
   const loadOrders = async () => {
     try {
       setLoading(true)
-      setError(null)
+      setErrorMessage(null)
       const response = await apiClient.getOrders()
       setOrders(response.results || [])
     } catch (error) {
       console.error('Error loading orders:', error)
-      setError('Error al cargar pedidos')
+      setErrorMessage('Error al cargar pedidos')
     } finally {
       setLoading(false)
     }
@@ -45,7 +47,7 @@ const OrderManagement = () => {
       console.error('Error updating order status:', error)
       // Revertir el cambio local si falló
       await loadOrders()
-      alert('Error al actualizar el estado del pedido')
+      showError('Error al actualizar el estado del pedido')
     }
   }
 
@@ -225,9 +227,9 @@ const OrderManagement = () => {
         </div>
       </div>
 
-      {error && (
+      {errorMessage && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          {error}
+          {errorMessage}
         </div>
       )}
 

@@ -2,6 +2,9 @@
 import { useState, useEffect } from 'react'
 import type { Product, Category, ProductVariant, ProductImage } from '../api/types'
 import apiClient from '../api/api'
+import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
+import { useCart } from '../contexts/CartContext'
 
 interface ProductWithVariants extends Product {
   variants: ProductVariant[];
@@ -15,6 +18,9 @@ const ProductCard = ({ product }: { product: ProductWithVariants }) => {
   const [customQuantity, setCustomQuantity] = useState('');
   const [useCustomQuantity, setUseCustomQuantity] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { isAuthenticated } = useAuth();
+  const { warning, error, success } = useToast();
+  const { addToCart } = useCart();
 
   const handleQuantityChange = (value: string) => {
     if (value === 'custom') {
@@ -31,7 +37,7 @@ const ProductCard = ({ product }: { product: ProductWithVariants }) => {
     if (!selectedVariant) return;
     
     const numValue = parseInt(value);
-    const variantStock = selectedVariant.stock || selectedVariant.stock_quantity || 0;
+    const variantStock = selectedVariant.stock || 0;
     if (!isNaN(numValue) && numValue > 0 && numValue <= variantStock) {
       setCustomQuantity(value);
       setQuantity(numValue);
@@ -42,33 +48,38 @@ const ProductCard = ({ product }: { product: ProductWithVariants }) => {
   };
 
   const handleAddToCart = async () => {
+    if (!isAuthenticated) {
+      warning('Debes iniciar sesión para agregar productos al carrito');
+      return;
+    }
+
     if (!selectedVariant) {
-      alert('Por favor selecciona una talla');
+      warning('Por favor selecciona una talla');
       return;
     }
     if (quantity <= 0) {
-      alert('Por favor selecciona una cantidad válida');
+      warning('Por favor selecciona una cantidad válida');
       return;
     }
-    const variantStock = selectedVariant.stock || selectedVariant.stock_quantity || 0;
+    const variantStock = selectedVariant.stock || 0;
     if (quantity > variantStock) {
-      alert(`Solo hay ${variantStock} unidades disponibles`);
+      warning(`Solo hay ${variantStock} unidades disponibles`);
       return;
     }
 
     try {
       setLoading(true);
-      await apiClient.addToCart(selectedVariant.id, quantity);
-      alert(`${product.name} agregado al carrito!\nTalla: ${selectedVariant.size}\nCantidad: ${quantity}`);
-      
+      await addToCart(selectedVariant.id, quantity);
+      success(`${product.name} agregado al carrito!`, `Talla: ${selectedVariant.size} • Cantidad: ${quantity}`);
+
       // Reset form
       setSelectedVariant(null);
       setQuantity(1);
       setCustomQuantity('');
       setUseCustomQuantity(false);
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-      alert('Error al agregar al carrito. Intenta nuevamente.');
+    } catch (err) {
+      console.error('Error adding to cart:', err);
+      error('Error al agregar al carrito. Intenta nuevamente.');
     } finally {
       setLoading(false);
     }
@@ -76,7 +87,7 @@ const ProductCard = ({ product }: { product: ProductWithVariants }) => {
 
   // Generar opciones de cantidad (máximo 5, luego opción personalizada)
   const quantityOptions = [];
-  const variantStock = selectedVariant ? (selectedVariant.stock || selectedVariant.stock_quantity || 0) : 0;
+  const variantStock = selectedVariant ? (selectedVariant.stock || 0) : 0;
   const maxOptions = selectedVariant ? Math.min(5, variantStock) : 5;
   
   for (let i = 1; i <= maxOptions; i++) {
@@ -85,7 +96,7 @@ const ProductCard = ({ product }: { product: ProductWithVariants }) => {
 
   // Get primary image or first available image
   const primaryImage = product.images.find(img => img.is_primary) || product.images[0];
-  const totalStock = product.variants.reduce((sum, variant) => sum + (variant.stock || variant.stock_quantity || 0), 0);
+  const totalStock = product.variants.reduce((sum, variant) => sum + (variant.stock || 0), 0);
   
   // Calculate price range from variants
   const getProductPrice = () => {
@@ -149,9 +160,9 @@ const ProductCard = ({ product }: { product: ProductWithVariants }) => {
             >
               <option value="">Seleccionar opción</option>
               {product.variants
-                .filter(variant => (variant.stock || variant.stock_quantity || 0) > 0)
+                .filter(variant => (variant.stock || 0) > 0)
                 .map((variant) => {
-                  const stock = variant.stock || variant.stock_quantity || 0;
+                  const stock = variant.stock || 0;
                   return (
                     <option key={variant.id} value={variant.id}>
                       {variant.size} {variant.color ? `- ${variant.color}` : ''} 
@@ -286,7 +297,11 @@ const Products = () => {
     }
   };
 
-  const filteredProducts = products;
+  // Filter out products that have no stock (all variants out of stock)
+  const filteredProducts = products.filter(product => {
+    const totalStock = product.variants.reduce((sum, variant) => sum + (variant.stock || 0), 0);
+    return totalStock > 0;
+  });
 
   return (
     <div className="bg-meow-background min-h-screen text-meow-text">

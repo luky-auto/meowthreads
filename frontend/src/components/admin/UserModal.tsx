@@ -3,6 +3,7 @@ import { X, User, Mail, Phone, Shield } from 'lucide-react'
 import type { User as UserType } from '../../api/types'
 import apiClient from '../../api/api'
 
+import { useToast } from '../../contexts/ToastContext'
 interface UserModalProps {
   isOpen: boolean
   onClose: () => void
@@ -11,6 +12,7 @@ interface UserModalProps {
 }
 
 function UserModal({ isOpen, onClose, onSave, user }: UserModalProps) {
+  const { success } = useToast()
   const [formData, setFormData] = useState({
     email: '',
     first_name: '',
@@ -83,7 +85,7 @@ function UserModal({ isOpen, onClose, onSave, user }: UserModalProps) {
           is_superuser: formData.is_superuser
         })
         
-        alert('Usuario actualizado exitosamente')
+        success('Usuario actualizado exitosamente')
       } else {
         // Create user
         await apiClient.register({
@@ -94,14 +96,15 @@ function UserModal({ isOpen, onClose, onSave, user }: UserModalProps) {
           password: formData.password
         })
         
-        alert('Usuario creado exitosamente')
+        success('Usuario creado exitosamente')
       }
 
       onSave()
       onClose()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving user:', error)
-      setError(error.message || 'Error al guardar el usuario')
+      const errorMessage = error instanceof Error ? error.message : 'Error al guardar el usuario'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }

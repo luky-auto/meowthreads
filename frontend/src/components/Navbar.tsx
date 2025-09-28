@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ShoppingCart, User, Shield } from 'lucide-react'
+import { ShoppingCart, User, Shield, Settings } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -56,13 +56,17 @@ function Navbar() {
                     {user?.first_name} {user?.last_name}
                     {isAdmin ? ' (Admin)' : ''}
                   </div>
+                  <Link to="/perfil" className="block px-3 py-1 hover:bg-meow-form rounded flex items-center gap-2">
+                    <Settings size={14} />
+                    Mi Perfil
+                  </Link>
                   {isAdmin && (
                     <Link to="/admin" className="block px-3 py-1 hover:bg-meow-form rounded flex items-center gap-2">
                       <Shield size={14} />
                       Panel Admin
                     </Link>
                   )}
-                  <button 
+                  <button
                     onClick={logout}
                     className="block w-full text-left px-3 py-1 hover:bg-meow-form rounded"
                   >

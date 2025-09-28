@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import { Star, ShoppingBag, Heart, Truck, Shield, Headphones, Instagram, Facebook, Twitter, Youtube } from 'lucide-react'
-// import HomeCarousel from '../components/HomeCarousel'
 
 // Productos destacados
 const featuredProducts = [

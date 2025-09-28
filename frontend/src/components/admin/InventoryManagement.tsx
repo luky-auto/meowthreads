@@ -16,15 +16,17 @@ import type { Product, Category } from '../../api/types'
 import apiClient from '../../api/api'
 import ProductModal from './ProductModal'
 import ProductDetailsModal from './ProductDetailsModal'
+import { useToast } from '../../contexts/ToastContext'
 
 function InventoryManagement() {
+  const { success, error: showError } = useToast()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('todos')
   const [filterStatus, setFilterStatus] = useState<string>('todos')
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [stats, setStats] = useState({
     total_products: 0,
     active_products: 0,
@@ -46,7 +48,7 @@ function InventoryManagement() {
   const loadData = async () => {
     try {
       setLoading(true)
-      setError(null)
+      setErrorMessage(null)
       
       const [productsResponse, categoriesData, statsData] = await Promise.all([
         apiClient.getAdminProducts(),
@@ -59,7 +61,7 @@ function InventoryManagement() {
       setStats(statsData)
     } catch (error) {
       console.error('Error loading inventory data:', error)
-      setError('Error al cargar los datos del inventario')
+      setErrorMessage('Error al cargar los datos del inventario')
     } finally {
       setLoading(false)
     }
@@ -69,10 +71,10 @@ function InventoryManagement() {
     try {
       await apiClient.toggleProductActive(productId)
       await loadData()
-      alert('Estado del producto actualizado exitosamente')
+      success('Estado del producto actualizado exitosamente')
     } catch (error) {
       console.error('Error toggling product active:', error)
-      alert('Error al cambiar el estado del producto')
+      showError('Error al cambiar el estado del producto')
     }
   }
 
@@ -80,10 +82,10 @@ function InventoryManagement() {
     try {
       await apiClient.toggleProductFeatured(productId)
       await loadData()
-      alert('Estado destacado del producto actualizado exitosamente')
+      success('Estado destacado del producto actualizado exitosamente')
     } catch (error) {
       console.error('Error toggling product featured:', error)
-      alert('Error al cambiar el estado destacado del producto')
+      showError('Error al cambiar el estado destacado del producto')
     }
   }
 
@@ -92,11 +94,11 @@ function InventoryManagement() {
       if (window.confirm('¿Estás seguro de que quieres eliminar este producto? Esta acción no se puede deshacer.')) {
         await apiClient.deleteProduct(productId)
         await loadData()
-        alert('Producto eliminado exitosamente')
+        success('Producto eliminado exitosamente')
       }
     } catch (error) {
       console.error('Error deleting product:', error)
-      alert('Error al eliminar el producto')
+      showError('Error al eliminar el producto')
     }
   }
 
@@ -279,9 +281,9 @@ function InventoryManagement() {
 
       {/* Content */}
       <div className="p-6">
-        {error && (
+        {errorMessage && (
           <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
+            {errorMessage}
           </div>
         )}
 

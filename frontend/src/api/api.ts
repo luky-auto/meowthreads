@@ -60,6 +60,9 @@ class ApiClient {
 
     if (this.token) {
       defaultHeaders.Authorization = `Bearer ${this.token}`;
+      console.log('Sending token:', this.token.substring(0, 10) + '...')
+    } else {
+      console.log('No token available for request to:', endpoint)
     }
 
     const config: RequestInit = {
@@ -171,6 +174,40 @@ class ApiClient {
     } catch {
       return false;
     }
+  }
+
+  // Generic HTTP Methods
+  async get<T>(endpoint: string): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'GET',
+    });
+  }
+
+  async post<T>(endpoint: string, data?: Record<string, unknown>): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async put<T>(endpoint: string, data?: Record<string, unknown>): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async patch<T>(endpoint: string, data?: Record<string, unknown>): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async delete<T>(endpoint: string): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'DELETE',
+    });
   }
 
   // Authentication Methods
@@ -520,7 +557,15 @@ class ApiClient {
     });
   }
 
-  async updateProduct(productId: number, productData: Partial<Product>): Promise<Product> {
+  async updateProduct(productId: number, productData: {
+    name?: string;
+    description?: string;
+    category?: number;
+    price?: string;
+    sku?: string;
+    is_active?: boolean;
+    is_featured?: boolean;
+  }): Promise<Product> {
     return await this.makeRequest<Product>(`/catalog/admin/products/${productId}/`, {
       method: 'PUT',
       body: JSON.stringify(productData)
@@ -553,7 +598,7 @@ class ApiClient {
   }
 
   async updateProductImage(imageId: number, altText?: string, isMain?: boolean): Promise<ProductImage> {
-    const data: any = {};
+    const data: Record<string, unknown> = {};
     if (altText !== undefined) data.alt_text = altText;
     if (isMain !== undefined) data.is_main = isMain;
 

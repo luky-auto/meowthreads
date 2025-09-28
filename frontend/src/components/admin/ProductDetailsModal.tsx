@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Eye, Edit, Image as ImageIcon } from 'lucide-react'
-import type { Product } from '../../api/types'
+import type { Product, ProductImage } from '../../api/types'
 import apiClient from '../../api/api'
 
 interface ProductDetailsModalProps {
@@ -10,8 +10,15 @@ interface ProductDetailsModalProps {
   productId: number | null
 }
 
+// Extend Product interface to include admin-specific fields
+interface ExtendedProduct extends Product {
+  sku?: string;
+  category_name?: string;
+  images?: ProductImage[];
+}
+
 function ProductDetailsModal({ isOpen, onClose, onEdit, productId }: ProductDetailsModalProps) {
-  const [product, setProduct] = useState<Product | null>(null)
+  const [product, setProduct] = useState<ExtendedProduct | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -99,7 +106,7 @@ function ProductDetailsModal({ isOpen, onClose, onEdit, productId }: ProductDeta
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600">Categoría</label>
-                      <p className="text-gray-900">{product.category?.name || (product as any).category_name || 'Sin categoría'}</p>
+                      <p className="text-gray-900">{product.category?.name || product.category_name || 'Sin categoría'}</p>
                     </div>
                   </div>
                 </div>
@@ -113,7 +120,7 @@ function ProductDetailsModal({ isOpen, onClose, onEdit, productId }: ProductDeta
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600">SKU</label>
-                      <p className="text-gray-900">{(product as any).sku || 'No definido'}</p>
+                      <p className="text-gray-900">{product.sku || 'No definido'}</p>
                     </div>
                     <div className="flex gap-4">
                       <div>
@@ -147,7 +154,7 @@ function ProductDetailsModal({ isOpen, onClose, onEdit, productId }: ProductDeta
                   <ImageIcon size={16} />
                   Imágenes del Producto
                 </h3>
-                {product.main_image || ((product as any).images && (product as any).images.length > 0) ? (
+                {product.main_image || (product.images && product.images.length > 0) ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {product.main_image && (
                       <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
@@ -165,7 +172,7 @@ function ProductDetailsModal({ isOpen, onClose, onEdit, productId }: ProductDeta
                         </div>
                       </div>
                     )}
-                    {(product as any).images && (product as any).images.slice(0, 2).map((image: any, index: number) => (
+                    {product.images && product.images.slice(0, 2).map((image: ProductImage, index: number) => (
                       <div key={image.id || index} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                         <img 
                           src={image.image} 

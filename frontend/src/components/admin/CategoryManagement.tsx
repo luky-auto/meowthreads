@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit3, Trash2, Search, Tag, Power } from 'lucide-react'
+import { Plus, Edit3, Trash2, Search, Tag } from 'lucide-react'
 import type { Category } from '../../api/types'
 import apiClient from '../../api/api'
 
+import { useToast } from '../../contexts/ToastContext'
 interface CategoryModalProps {
   isOpen: boolean
   onClose: () => void
@@ -51,9 +52,10 @@ function CategoryModal({ isOpen, onClose, onSave, category }: CategoryModalProps
       }
       onSave()
       onClose()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving category:', error)
-      setError(error.message || 'Error al guardar la categoría')
+      const errorMessage = error instanceof Error ? error.message : 'Error al guardar la categoría'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -162,6 +164,7 @@ function CategoryModal({ isOpen, onClose, onSave, category }: CategoryModalProps
 }
 
 function CategoryManagement() {
+  const { error: showError } = useToast()
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -201,7 +204,7 @@ function CategoryManagement() {
         await loadCategories()
       } catch (error) {
         console.error('Error deleting category:', error)
-        alert('Error al eliminar la categoría')
+        showError('Error al eliminar la categoría')
       }
     }
   }
@@ -294,12 +297,12 @@ function CategoryManagement() {
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                       {category.name}
-                      {!category.is_active && (
+                      {category.is_active === false && (
                         <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">
                           Inactiva
                         </span>
                       )}
-                      {category.is_active && (
+                      {category.is_active !== false && (
                         <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
                           Activa
                         </span>
@@ -315,7 +318,7 @@ function CategoryManagement() {
 
                 <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
                   <span>ID: {category.id}</span>
-                  <span>{new Date(category.created_at).toLocaleDateString()}</span>
+                  <span>{category.created_at ? new Date(category.created_at).toLocaleDateString() : 'N/A'}</span>
                 </div>
 
                 <div className="flex gap-2">

@@ -1,23 +1,25 @@
 // src/pages/Cart.tsx
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Trash2, Plus, Minus, ShoppingBag } from 'lucide-react'
-import type { Cart as CartType, CartItem } from '../api/types'
-import apiClient from '../api/api'
+import type { CartItem } from '../api/types'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
+import { useCart } from '../contexts/CartContext'
 import CheckoutModal from './CheckoutModal'
 
-const CartItemCard = ({ 
-  item, 
-  onUpdateQuantity, 
-  onRemoveItem 
-}: { 
+const CartItemCard = ({
+  item,
+  onUpdateQuantity,
+  onRemoveItem
+}: {
   item: CartItem;
   onUpdateQuantity: (id: number, newQuantity: number) => Promise<void>;
   onRemoveItem: (id: number) => Promise<void>;
 }) => {
   const [isRemoving, setIsRemoving] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const { warning, error } = useToast();
 
   const handleQuantityChange = async (newQuantity: number) => {
     if (newQuantity <= 0) {
@@ -25,16 +27,16 @@ const CartItemCard = ({
       return;
     }
     if (newQuantity > item.product_variant.stock) {
-      alert(`Solo hay ${item.product_variant.stock} unidades disponibles`);
+      warning(`Solo hay ${item.product_variant.stock} unidades disponibles`);
       return;
     }
     
     setUpdating(true);
     try {
       await onUpdateQuantity(item.id, newQuantity);
-    } catch (error) {
-      console.error('Error updating quantity:', error);
-      alert('Error al actualizar la cantidad');
+    } catch (err) {
+      console.error('Error updating quantity:', err);
+      error('Error al actualizar la cantidad');
     } finally {
       setUpdating(false);
     }
@@ -44,9 +46,9 @@ const CartItemCard = ({
     setIsRemoving(true);
     try {
       await onRemoveItem(item.id);
-    } catch (error) {
-      console.error('Error removing item:', error);
-      alert('Error al eliminar el producto');
+    } catch (err) {
+      console.error('Error removing item:', err);
+      error('Error al eliminar el producto');
       setIsRemoving(false);
     }
   };
@@ -140,62 +142,32 @@ const CartItemCard = ({
 };
 
 const Cart = () => {
-  const [cart, setCart] = useState<CartType | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState('');
   const [discount, setDiscount] = useState(0);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const { isAuthenticated } = useAuth();
+  const { success, error: toastError } = useToast();
+  const {
+    cartItems,
+    cartCount,
+    subtotal,
+    isLoading: loading,
+    updateQuantity,
+    removeFromCart,
+    refreshCart
+  } = useCart();
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadCart();
-    } else {
-      setLoading(false);
-    }
-  }, [isAuthenticated]);
-
-  const loadCart = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const cartData = await apiClient.getCart();
-      setCart(cartData);
-    } catch (error) {
-      console.error('Error loading cart:', error);
-      setError('Error al cargar el carrito');
-      setCart(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Calcular totales
-  const cartItems = cart?.items || [];
-  const subtotal = cart?.total_price || 0;
+  // Calcular totales usando datos del contexto
   const shipping = subtotal > 150000 ? 0 : 15000; // Envío gratis para compras mayores a $150.000
   const discountAmount = (subtotal * discount) / 100;
   const total = subtotal + shipping - discountAmount;
 
-  const totalItems = cart?.total_items || 0;
-
   const handleUpdateQuantity = async (id: number, newQuantity: number) => {
-    try {
-      await apiClient.updateCartItem(id, newQuantity);
-      await loadCart(); // Reload cart to get updated data
-    } catch (error) {
-      throw error;
-    }
+    await updateQuantity(id, newQuantity);
   };
 
   const handleRemoveItem = async (id: number) => {
-    try {
-      await apiClient.removeFromCart(id);
-      await loadCart(); // Reload cart to get updated data
-    } catch (error) {
-      throw error;
-    }
+    await removeFromCart(id);
   };
 
   const handleApplyPromoCode = () => {
@@ -208,9 +180,9 @@ const Cart = () => {
 
     if (promoCodes[promoCode.toUpperCase()]) {
       setDiscount(promoCodes[promoCode.toUpperCase()]);
-      alert(`¡Código aplicado! Descuento del ${promoCodes[promoCode.toUpperCase()]}%`);
+      success(`¡Código aplicado! Descuento del ${promoCodes[promoCode.toUpperCase()]}%`);
     } else if (promoCode.trim()) {
-      alert('Código promocional no válido');
+      toastError('Código promocional no válido');
     }
   };
 
@@ -221,7 +193,7 @@ const Cart = () => {
 
   const handleCheckoutSuccess = async () => {
     // Reload cart to clear it after successful checkout
-    await loadCart();
+    await refreshCart();
     setShowCheckoutModal(false);
   };
 
@@ -254,17 +226,12 @@ const Cart = () => {
             Carrito de Compras
             {cartItems.length > 0 && (
               <span className="text-lg font-normal text-gray-600 ml-2">
-                ({totalItems} artículo{totalItems !== 1 ? 's' : ''})
+                ({cartCount} artículo{cartCount !== 1 ? 's' : ''})
               </span>
             )}
           </h1>
         </div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
-          </div>
-        )}
 
         {loading ? (
           <div className="flex justify-center items-center py-12">
@@ -339,7 +306,7 @@ const Cart = () => {
                 {/* Desglose de precios */}
                 <div className="space-y-2 text-sm border-t border-gray-200 pt-4">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Subtotal ({totalItems} artículos)</span>
+                    <span className="text-gray-600">Subtotal ({cartCount} artículos)</span>
                     <span className="text-meow-text">${subtotal.toLocaleString()}</span>
                   </div>
                   
@@ -404,7 +371,8 @@ const Cart = () => {
           onClose={() => setShowCheckoutModal(false)}
           onSuccess={handleCheckoutSuccess}
           cartItems={cartItems}
-          total={subtotal}
+          total={total}
+          subtotal={subtotal}
           discount={discountAmount}
           shipping={shipping}
         />

@@ -63,6 +63,8 @@ export interface Category {
   name: string;
   description?: string;
   parent?: number;
+  is_active?: boolean;
+  created_at?: string;
 }
 
 export interface ProductVariant {

@@ -43,24 +43,59 @@ class CartItemViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         cart, created = Cart.objects.get_or_create(user=request.user)
-        
-        try:
-            existing_item = CartItem.objects.get(
-                cart=cart,
-                product_variant_id=request.data.get('product_variant_id')
-            )
-            existing_item.quantity += int(request.data.get('quantity', 1))
-            existing_item.save()
-            serializer = self.get_serializer(existing_item)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except CartItem.DoesNotExist:
-            return super().create(request, *args, **kwargs)
+
+        # Get the product_variant_id from request data (frontend sends 'product_variant')
+        product_variant_id = request.data.get('product_variant')
+
+        if product_variant_id:
+            try:
+                # Check if this product variant is already in the cart
+                existing_item = CartItem.objects.get(
+                    cart=cart,
+                    product_variant_id=product_variant_id
+                )
+                # If it exists, update the quantity
+                existing_item.quantity += int(request.data.get('quantity', 1))
+                existing_item.save()
+                serializer = self.get_serializer(existing_item)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except CartItem.DoesNotExist:
+                # If it doesn't exist, we'll create a new one
+                pass
+
+        # Create new cart item or handle the case where product_variant is None
+        # We need to ensure the serializer gets the right field name
+        mutable_data = request.data.copy()
+        if 'product_variant' in mutable_data:
+            mutable_data['product_variant_id'] = mutable_data.pop('product_variant')
+        request._full_data = mutable_data
+
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        """Override the standard update method to handle quantity updates"""
+        item = self.get_object()
+        quantity = request.data.get('quantity')
+
+        # If only quantity is being updated
+        if 'quantity' in request.data and len(request.data) == 1:
+            if quantity and int(quantity) > 0:
+                item.quantity = int(quantity)
+                item.save()
+                serializer = self.get_serializer(item)
+                return Response(serializer.data)
+            else:
+                item.delete()
+                return Response({'message': 'Producto eliminado del carrito'})
+
+        # For other updates, use the default behavior
+        return super().update(request, *args, **kwargs)
 
     @action(detail=True, methods=['patch'])
     def update_quantity(self, request, pk=None):
         item = self.get_object()
         quantity = request.data.get('quantity')
-        
+
         if quantity and int(quantity) > 0:
             item.quantity = int(quantity)
             item.save()

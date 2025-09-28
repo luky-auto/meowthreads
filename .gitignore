@@ -33,7 +33,7 @@ htmlcov/
 # archivos omitidos, por pruebas que se creoo test: o borrar local
 create_default_sizes.py
 create_sample_data.py
-
+test/
 # Django
 *.log
 local_settings.py

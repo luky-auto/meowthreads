@@ -3,6 +3,34 @@ import { X, Package, FileText, Tag, DollarSign, Hash, Power, Star, Upload, Image
 import type { Product, Category, ProductImage, ProductVariant, SizeConfiguration } from '../../api/types'
 import apiClient from '../../api/api'
 
+import { useToast } from '../../contexts/ToastContext'
+
+// Extended interfaces for admin functionality
+interface ExtendedProduct extends Product {
+  sku?: string;
+}
+
+interface ExtendedProductVariant extends ProductVariant {
+  stock_quantity?: number;
+  price_adjustment?: number;
+}
+
+interface ExtendedProductImage extends ProductImage {
+  is_main?: boolean;
+}
+
+interface NewVariantData {
+  size: string;
+  color: string;
+  stock_quantity: number;
+  price_adjustment: number;
+}
+
+interface EditVariantData {
+  stock_quantity: number;
+  price_adjustment: number;
+}
+
 // Dynamic size options will be loaded from backend
 
 interface ProductModalProps {
@@ -14,6 +42,7 @@ interface ProductModalProps {
 }
 
 function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductModalProps) {
+  const { success, error: showError, warning } = useToast()
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -25,21 +54,18 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [images, setImages] = useState<ProductImage[]>([])
+  const [images, setImages] = useState<ExtendedProductImage[]>([])
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [imageError, setImageError] = useState<string | null>(null)
-  const [variants, setVariants] = useState<ProductVariant[]>([])
-  const [newVariant, setNewVariant] = useState({
+  const [variants, setVariants] = useState<ExtendedProductVariant[]>([])
+  const [newVariant, setNewVariant] = useState<NewVariantData>({
     size: '',
     color: '',
     stock_quantity: 0,
     price_adjustment: 0
   })
   const [editingVariant, setEditingVariant] = useState<number | null>(null)
-  const [editVariantData, setEditVariantData] = useState<{
-    stock_quantity: number;
-    price_adjustment: number;
-  }>({ stock_quantity: 0, price_adjustment: 0 })
+  const [editVariantData, setEditVariantData] = useState<EditVariantData>({ stock_quantity: 0, price_adjustment: 0 })
   const [sizeOptions, setSizeOptions] = useState<SizeConfiguration[]>([])
 
   const isEditing = !!product
@@ -61,7 +87,7 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
         description: product.description || '',
         category: categoryId,
         price: product.price || '',
-        sku: (product as any).sku || '',
+        sku: (product as ExtendedProduct).sku || '',
         is_active: product.is_active ?? true,
         is_featured: product.is_featured ?? false
       })
@@ -141,11 +167,11 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
         throw new Error('Por favor completa todos los campos requeridos')
       }
 
-      const productData: any = {
+      const productData = {
         name: formData.name,
         description: formData.description,
         category: parseInt(formData.category),
-        price: parseFloat(formData.price),
+        price: formData.price,
         sku: formData.sku,
         is_active: formData.is_active,
         is_featured: formData.is_featured
@@ -187,9 +213,9 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
           try {
             await apiClient.createProductVariant(savedProduct.id, {
               size: variant.size,
-              color: variant.color,
-              stock_quantity: variant.stock_quantity,
-              price_adjustment: variant.price_adjustment
+              color: variant.color || '',
+              stock_quantity: variant.stock_quantity || 0,
+              price_adjustment: variant.price_adjustment || 0
             })
           } catch (variantError) {
             console.error(`Error creating variant ${variant.size}-${variant.color}:`, variantError)
@@ -198,12 +224,13 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
         }
       }
 
-      alert(isEditing ? 'Producto actualizado exitosamente' : 'Producto creado exitosamente')
+      success(isEditing ? 'Producto actualizado exitosamente' : 'Producto creado exitosamente')
       onSave()
       onClose()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving product:', error)
-      setError(error.message || 'Error al guardar el producto')
+      const errorMessage = error instanceof Error ? error.message : 'Error al guardar el producto'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -272,7 +299,7 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
 
   const addVariant = async () => {
     if (!newVariant.size || !newVariant.color) {
-      alert('Por favor completa talla y color')
+      warning('Por favor completa talla y color')
       return
     }
 
@@ -280,7 +307,7 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
       try {
         await apiClient.createProductVariant(product.id, {
           size: newVariant.size,
-          color: newVariant.color,
+          color: newVariant.color || '',
           stock_quantity: newVariant.stock_quantity,
           price_adjustment: newVariant.price_adjustment
         })
@@ -288,7 +315,7 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
         setNewVariant({ size: '', color: '', stock_quantity: 0, price_adjustment: 0 })
       } catch (error) {
         console.error('Error creating variant:', error)
-        alert('Error al crear la variante')
+        showError('Error al crear la variante')
       }
     } else {
       // For new products, add to temporary list
@@ -317,7 +344,7 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
         await loadProductVariants()
       } catch (error) {
         console.error('Error deleting variant:', error)
-        alert('Error al eliminar la variante')
+        showError('Error al eliminar la variante')
       }
     } else {
       setVariants(variants.filter(v => v.id !== variantId))
@@ -327,8 +354,8 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
   const startEditVariant = (variant: ProductVariant) => {
     setEditingVariant(variant.id)
     setEditVariantData({
-      stock_quantity: variant.stock_quantity,
-      price_adjustment: variant.price_adjustment
+      stock_quantity: (variant as ExtendedProductVariant).stock_quantity || variant.stock || 0,
+      price_adjustment: (variant as ExtendedProductVariant).price_adjustment || 0
     })
   }
 
@@ -347,7 +374,7 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
       setEditVariantData({ stock_quantity: 0, price_adjustment: 0 })
     } catch (error) {
       console.error('Error updating variant:', error)
-      alert('Error al actualizar la variante')
+      showError('Error al actualizar la variante')
     }
   }
 
@@ -520,16 +547,16 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
                         <img
                           src={image.image}
                           alt={image.alt_text || 'Imagen del producto'}
-                          className={`w-full h-24 object-cover rounded-lg border ${image.is_main ? 'border-green-500 border-2' : 'border-gray-200'}`}
+                          className={`w-full h-24 object-cover rounded-lg border ${image.is_main || image.is_primary ? 'border-green-500 border-2' : 'border-gray-200'}`}
                         />
-                        {image.is_main && (
+                        {(image.is_main || image.is_primary) && (
                           <div className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1 rounded">
                             Principal
                           </div>
                         )}
                         <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <div className="flex gap-1">
-                            {!image.is_main && (
+                            {!(image.is_main || image.is_primary) && (
                               <button
                                 type="button"
                                 onClick={() => setAsMainImage(image.id)}
@@ -693,13 +720,13 @@ function ProductModal({ isOpen, onClose, onSave, product, categories }: ProductM
                               <span className="text-sm font-medium">{variant.size}</span>
                               <span className="text-sm text-gray-600">{variant.color}</span>
                               <span className="text-sm">
-                                Stock: <span className={variant.stock_quantity > 0 ? 'text-green-600' : 'text-red-600'}>
-                                  {variant.stock_quantity}
+                                Stock: <span className={((variant as ExtendedProductVariant).stock_quantity || variant.stock || 0) > 0 ? 'text-green-600' : 'text-red-600'}>
+                                  {(variant as ExtendedProductVariant).stock_quantity || variant.stock || 0}
                                 </span>
                               </span>
-                              {variant.price_adjustment !== 0 && (
+                              {((variant as ExtendedProductVariant).price_adjustment || 0) !== 0 && (
                                 <span className="text-sm text-blue-600">
-                                  Ajuste: ${variant.price_adjustment}
+                                  Ajuste: ${(variant as ExtendedProductVariant).price_adjustment || 0}
                                 </span>
                               )}
                             </div>

@@ -14,12 +14,14 @@ import type { User as UserType, PaginatedResponse } from '../../api/types'
 import apiClient from '../../api/api'
 import UserModal from './UserModal'
 
+import { useToast } from '../../contexts/ToastContext'
 function UserManagement() {
+  const { success, error: showError, warning } = useToast()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<'todos' | 'activo' | 'inactivo'>('todos')
   const [users, setUsers] = useState<UserType[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [stats, setStats] = useState({
     total_users: 0,
     active_users: 0,
@@ -37,12 +39,12 @@ function UserManagement() {
   const loadUsers = async () => {
     try {
       setLoading(true)
-      setError(null)
+      setErrorMessage(null)
       const response: PaginatedResponse<UserType> = await apiClient.getAdminUsers()
       setUsers(response.results)
     } catch (error) {
       console.error('Error loading users:', error)
-      setError('Error al cargar los usuarios')
+      setErrorMessage('Error al cargar los usuarios')
     } finally {
       setLoading(false)
     }
@@ -62,10 +64,10 @@ function UserManagement() {
       await apiClient.activateUser(userId)
       await loadUsers()
       await loadStats()
-      alert('Usuario activado exitosamente')
+      success('Usuario activado exitosamente')
     } catch (error) {
       console.error('Error activating user:', error)
-      alert('Error al activar el usuario')
+      showError('Error al activar el usuario')
     }
   }
 
@@ -73,7 +75,7 @@ function UserManagement() {
     try {
       const user = users.find(u => u.id === userId)
       if (user?.is_superuser) {
-        alert('No puedes desactivar un superusuario')
+        warning('No puedes desactivar un superusuario')
         return
       }
       
@@ -81,11 +83,11 @@ function UserManagement() {
         await apiClient.deactivateUser(userId)
         await loadUsers()
         await loadStats()
-        alert('Usuario desactivado exitosamente')
+        success('Usuario desactivado exitosamente')
       }
     } catch (error) {
       console.error('Error deactivating user:', error)
-      alert('Error al desactivar el usuario')
+      showError('Error al desactivar el usuario')
     }
   }
 
@@ -93,7 +95,7 @@ function UserManagement() {
     try {
       const user = users.find(u => u.id === userId)
       if (user?.is_superuser) {
-        alert('No puedes eliminar un superusuario')
+        warning('No puedes eliminar un superusuario')
         return
       }
       
@@ -101,11 +103,11 @@ function UserManagement() {
         await apiClient.deleteUser(userId)
         await loadUsers()
         await loadStats()
-        alert('Usuario eliminado exitosamente')
+        success('Usuario eliminado exitosamente')
       }
     } catch (error) {
       console.error('Error deleting user:', error)
-      alert('Error al eliminar el usuario')
+      showError('Error al eliminar el usuario')
     }
   }
 
@@ -210,7 +212,7 @@ function UserManagement() {
           <select
             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-meow-accent"
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as any)}
+            onChange={(e) => setFilterStatus(e.target.value as 'todos' | 'activo' | 'inactivo')}
           >
             <option value="todos">Todos los estados</option>
             <option value="activo">Activos</option>
@@ -221,9 +223,9 @@ function UserManagement() {
 
       {/* Content */}
       <div className="p-6">
-        {error && (
+        {errorMessage && (
           <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
+            {errorMessage}
           </div>
         )}
 

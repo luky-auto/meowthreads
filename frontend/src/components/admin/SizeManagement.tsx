@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit3, Trash2, Search, Ruler, ArrowUpDown, Power } from 'lucide-react'
+import { Plus, Edit3, Trash2, Search, Ruler, ArrowUpDown } from 'lucide-react'
 import type { SizeConfiguration } from '../../api/types'
 import apiClient from '../../api/api'
 
+import { useToast } from '../../contexts/ToastContext'
 interface SizeModalProps {
   isOpen: boolean
   onClose: () => void
@@ -57,9 +58,10 @@ function SizeModal({ isOpen, onClose, onSave, size }: SizeModalProps) {
       }
       onSave()
       onClose()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving size:', error)
-      setError(error.message || 'Error al guardar la talla')
+      const errorMessage = error instanceof Error ? error.message : 'Error al guardar la talla'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -202,6 +204,7 @@ function SizeModal({ isOpen, onClose, onSave, size }: SizeModalProps) {
 
 function SizeManagement() {
   const [sizes, setSizes] = useState<SizeConfiguration[]>([])
+  const { error: showError } = useToast()
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -240,7 +243,7 @@ function SizeManagement() {
         await loadSizes()
       } catch (error) {
         console.error('Error deleting size:', error)
-        alert('Error al eliminar la talla')
+        showError('Error al eliminar la talla')
       }
     }
   }

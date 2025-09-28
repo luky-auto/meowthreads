@@ -19,6 +19,7 @@ class Payment(models.Model):
         ('paypal', 'PayPal'),
         ('bank_transfer', 'Transferencia Bancaria'),
         ('cash_on_delivery', 'Pago Contra Entrega'),
+        ('mercadopago', 'MercadoPago'),
     ]
 
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='payment')

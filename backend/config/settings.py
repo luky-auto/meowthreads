@@ -171,3 +171,19 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# MercadoPago Configuration
+MERCADOPAGO_ACCESS_TOKEN = config('MERCADOPAGO_ACCESS_TOKEN')
+MERCADOPAGO_PUBLIC_KEY = config('MERCADOPAGO_PUBLIC_KEY')
+MERCADOPAGO_TEST_MODE = config('MERCADOPAGO_TEST_MODE', default=True, cast=bool)
+
+# URLs dinámicas para desarrollo y producción
+BACKEND_BASE_URL = config('BACKEND_BASE_URL', default='http://localhost:8000')
+FRONTEND_BASE_URL = config('FRONTEND_BASE_URL', default='http://localhost:5174')
+
+# ePayco Configuration (Legacy - keeping for reference)
+EPAYCO_PUBLIC_KEY = config('EPAYCO_PUBLIC_KEY', default='491d6a0b6e992cf924edd8d3d088aff1')
+EPAYCO_PRIVATE_KEY = config('EPAYCO_PRIVATE_KEY', default='268c8e0162990cf2dfd722f0bb0fccde')
+EPAYCO_CUSTOMER_ID = config('EPAYCO_CUSTOMER_ID', default='508029')
+EPAYCO_P_KEY = config('EPAYCO_P_KEY', default='491d6a0b6e992cf924edd8d3d088aff1')
+EPAYCO_TEST_MODE = config('EPAYCO_TEST_MODE', default=True, cast=bool)

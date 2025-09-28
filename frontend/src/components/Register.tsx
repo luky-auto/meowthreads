@@ -37,6 +37,7 @@ function Register() {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmPassword, ...registerData } = form;
     const success = await register(registerData);
     if (success) {
